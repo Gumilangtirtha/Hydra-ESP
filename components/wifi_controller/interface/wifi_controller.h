@@ -40,10 +40,9 @@ esp_err_t wifictl_get_mgmt_creds(char *out_ssid, size_t ssid_len, char *out_pass
 
 // --- Fungsi Tambahan (Vendor Spoofing Dinamis) ---
 /**
- * @brief Menghasilkan LAA MAC Address secara matematis dinamis.
- *        Byte pertama dikunci agar valid standar IEEE 802.11 LAA,
- *        sedangkan 5 byte sisanya diacak total.
+ * @brief Mengubah MAC Address AP agar menggunakan identitas vendor Huawei
+ *        dengan 3 byte terakhir yang diacak secara dinamis via hardware generator.
  */
-void wifictl_set_random_laa_mac(void);
+void wifictl_set_vendor_huawei_random_mac(void);
 
 #endif
