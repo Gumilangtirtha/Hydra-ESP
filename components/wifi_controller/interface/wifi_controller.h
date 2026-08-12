@@ -40,9 +40,9 @@ esp_err_t wifictl_get_mgmt_creds(char *out_ssid, size_t ssid_len, char *out_pass
 
 // --- Fungsi Tambahan (Vendor Spoofing Dinamis) ---
 /**
- * @brief Mengubah MAC Address AP agar menggunakan identitas vendor Huawei
+ * @brief Mengubah MAC Address AP agar menggunakan identitas vendor ZTE
  *        dengan 3 byte terakhir yang diacak secara dinamis via hardware generator.
  */
-void wifictl_set_vendor_huawei_random_mac(void);
+void wifictl_set_vendor_zte_random_mac(void);
 
 #endif
