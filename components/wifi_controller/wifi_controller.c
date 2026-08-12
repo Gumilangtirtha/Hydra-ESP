@@ -14,8 +14,8 @@
 #include "nvs_flash.h"
 #include "nvs.h"
 
-// Tambahan pustaka generator acak hardware ESP32
-#include "esp_random.h"
+// Perbaikan Pustaka untuk fungsi esp_random() pada ESP-IDF v4.4.x
+#include "esp_system.h"
 // Pustaka ADC untuk True Random Entropy
 #include "driver/adc.h"
 
